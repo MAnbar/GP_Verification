@@ -51,10 +51,12 @@ public class Main {
 
                 for(int z=0;z<landmarks.size();z++){
                     MatOfPoint2f lm = landmarks.get(z);
-                    for(int h=0;h<lm.rows();h++){
+                    for(Integer h=0;h<lm.rows();h++){
                         double[] dp=lm.get(h,0);
                         Point p =new Point(dp[0], dp[1]);
                         Imgproc.circle(origImg2, p, 2,new Scalar(222), 2);
+                        p.y=p.y+8;
+                        Imgproc.putText(origImg2, h.toString(), p, 1, 1, new Scalar(222));
                     }
                 }
                 Imgcodecs.imwrite(Output_Images_PATH+"/Test"+imgName+classifiers.get(i)+".jpg", origImg2);
