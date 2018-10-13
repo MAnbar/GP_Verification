@@ -54,9 +54,9 @@ public class Main {
                     for(Integer h=0;h<lm.rows();h++){
                         double[] dp=lm.get(h,0);
                         Point p =new Point(dp[0], dp[1]);
-                        Imgproc.circle(origImg2, p, 2,new Scalar(222), 2);
+                        Imgproc.circle(origImg2, p, 2,new Scalar(0,255,255), 2);
                         p.y=p.y+8;
-                        Imgproc.putText(origImg2, h.toString(), p, 1, 1, new Scalar(222));
+                        Imgproc.putText(origImg2, h.toString(), p, 1, 1, new Scalar(0,255,255));
                     }
                 }
                 Imgcodecs.imwrite(Output_Images_PATH+"/Test"+imgName+classifiers.get(i)+".jpg", origImg2);
