@@ -8,11 +8,13 @@ import org.opencv.core.MatOfPoint2f;
 import org.opencv.core.MatOfRect;
 import org.opencv.core.Point;
 import org.opencv.core.Scalar;
+import org.opencv.core.Size;
 import org.opencv.face.Face;
 import org.opencv.face.Facemark;
 import org.opencv.highgui.HighGui;
 import org.opencv.imgcodecs.Imgcodecs;
 import org.opencv.imgproc.Imgproc;
+import static org.opencv.imgproc.Imgproc.warpAffine;
 import org.opencv.objdetect.CascadeClassifier;
 
 public class Verifier {
@@ -51,8 +53,14 @@ public class Verifier {
         HighGui.waitKey();
     }
     
-    public void Rotate(Mat img1,Mat img2){
+    public Mat rotate(Mat src, double angle){
+        Size size=new Size(src.cols(), src.rows());
+        Mat dst = new Mat(size, src.type());
         
+        Point center = new Point(src.cols()/2, src.rows()/2);
+        Mat r = Imgproc.getRotationMatrix2D(center, angle, 1);
+        warpAffine(src, dst, r, size);
+        return dst;
     }
     
     public void detectAllImgLandmarks(){

@@ -57,7 +57,6 @@ public class Main {
 
                 for(int z=0;z<landmarks.size();z++){
                     MatOfPoint2f lm = landmarks.get(z);
-                    
                     for(Integer h=0;h<lm.rows();h++){
                         double[] dp=lm.get(h,0);
                         Point p =new Point(dp[0], dp[1]);
