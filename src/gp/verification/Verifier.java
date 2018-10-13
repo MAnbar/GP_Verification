@@ -2,6 +2,9 @@ package gp.verification;
 
 import gp.services.FileManager;
 import java.util.ArrayList;
+import java.util.Arrays;
+import org.opencv.core.Core;
+import static org.opencv.core.CvType.CV_64F;
 import org.opencv.core.Mat;
 import org.opencv.core.MatOfPoint2f;
 import org.opencv.core.MatOfRect;
@@ -27,6 +30,7 @@ public class Verifier {
     private final Facemark fm1;
 
     int counter;
+    double max;
 //--============================================================================
     public Verifier() {
         this.counter = 0;
@@ -135,10 +139,10 @@ public class Verifier {
         return dst;
     }
 //--============================================================================
-    public Mat compare(Mat img1, Mat img2){
+    public boolean compare(Mat img1, Mat img2,double tolerance){
         
-        Mat sImage1;
-        Mat sImage2;
+        Mat fMat1;
+        Mat fMat2;
         
         MatOfRect faces1 = new MatOfRect();
         MatOfRect faces2 = new MatOfRect();
@@ -147,7 +151,7 @@ public class Verifier {
         classifierArray[0].detectMultiScale(img2, faces2);
 
         if(faces1.empty()||faces2.empty()){
-            return null;
+            return false;
         }
         ArrayList<MatOfPoint2f> landmarks1= new ArrayList<>();
         ArrayList<MatOfPoint2f> landmarks2= new ArrayList<>();
@@ -157,17 +161,13 @@ public class Verifier {
 
         MatOfPoint2f lm1 = landmarks1.get(0);
         MatOfPoint2f lm2 = landmarks2.get(0);
-
         
-        for(Integer h=0;h<lm1.rows();h++){
-            double[] dp=lm1.get(h,0);
-            Point p =new Point(dp[0], dp[1]);
-            Imgproc.circle(img1, p, 2,new Scalar(0,255,255), 2);
-            
-            dp=lm2.get(h,0);
-            p =new Point(dp[0], dp[1]);
-            Imgproc.circle(img2, p, 2,new Scalar(0,255,255), 2);
-        }
+//        System.out.println(lm1.dump());
+//        System.out.println(lm2.dump());
+//        System.out.println(lm1.get(0, 0).toString());
+        
+        drawLandMarks(lm1, img1);
+        drawLandMarks(lm2, img2);
 
         Point left27i1=getLandMarkPoint(lm1, 27);
         Point right28i1=getLandMarkPoint(lm1, 28);
@@ -177,33 +177,131 @@ public class Verifier {
 
         double dY1=right28i1.x-left27i1.x;
         double dX1=right28i1.y-left27i1.y;
-        double angle1=Math.toDegrees(Math.atan2(dY1, dX1));
         double length1= Math.sqrt(dX1*dX1+dY1*dY1);
-        Point eyes1Center = new Point( (left27i1.x + right28i1.x) * 0.5f, (left27i1.y + right28i1.y) * 0.5f );
-        System.out.println(angle1);
+//        double angle1=Math.toDegrees(Math.atan2(dY1, dX1));
+//        Point eyes1Center = new Point( (left27i1.x + right28i1.x) * 0.5f, (left27i1.y + right28i1.y) * 0.5f );
+//        System.out.println(angle1);
         
         double dY2=right28i2.x-left27i2.x;
         double dX2=right28i2.y-left27i2.y;
-        double angle2=Math.toDegrees(Math.atan2(dY2, dX2));
-        double length2= Math.sqrt(dX1*dX1+dY1*dY1);
-        Point eyes2Center = new Point( (left27i2.x + right28i2.x) * 0.5f, (left27i2.y + right28i2.y) * 0.5f );
-        System.out.println(angle2);
+        double length2= Math.sqrt(dX2*dX2+dY2*dY2);
+//        double angle2=Math.toDegrees(Math.atan2(dY2, dX2));
+//        Point eyes2Center = new Point( (left27i2.x + right28i2.x) * 0.5f, (left27i2.y + right28i2.y) * 0.5f );
+//        System.out.println(angle2);
         
-        double scale=length2/length1;
-//        Mat rot_mat = Imgproc.getRotationMatrix2D(eyes1Center, angle1, scale);
-//        Imgproc.warpAffine(img1, sImage1, rot_mat, img2.size());                 
-//        Mat homography = Calib3d.findHomography(lm1, lm2);
-//        Imgproc.warpPerspective(img1, sImage1, homography, img2.size());
-        sImage1=rotateScaleImg(img1, -angle1, scale);
-        sImage2=rotateScaleImg(img2, -angle2, 1);
-        writeImage("SC1", sImage1);
-        writeImage("SC2", sImage2);
-        return sImage1;
+        double scale2To1=length2/length1;
+        
+        return verifyUsingWholeDifference(lm1,lm2, scale2To1,tolerance);        
     }
 
     public Point getLandMarkPoint(MatOfPoint2f lm, int PointID){
         double[] dp=lm.get(PointID,0);
         return new Point(dp[0], dp[1]);
+    }
+
+    public void drawLandMarks( MatOfPoint2f lm, Mat img){
+        for(Integer h=0;h<lm.rows();h++){
+            double[] dp=lm.get(h,0);
+            Point p =new Point(dp[0], dp[1]);
+            Imgproc.circle(img, p, 2,new Scalar(0,255,255), 2);
+        }
+    }
+    
+    public boolean verifyUsingWholeDifference( MatOfPoint2f origLM1, MatOfPoint2f origLM2, double scale2Over1,double tolerance){
+        max=0;
+        
+        double[][] featureLM1 = createDifferenceFeatureMatrix(origLM1,scale2Over1);
+        double[][] featureLM2 = createDifferenceFeatureMatrix(origLM2,1);
+
+        
+        boolean result = compareLandmarks(featureLM1,featureLM2,tolerance);
+        System.out.println("Max:"+max);
+        return result;
+    }
+    
+    public double getLength(double dX, double dY){
+        return Math.sqrt(dX*dX+dY*dY);
+    }
+    
+    public Point subtractPoints(Point a, Point b, double scale){
+        return new Point(Math.abs(a.x-b.x)*scale, Math.abs(a.y-b.y)*scale);
+    }
+    
+    public double getScaledDistance(Point a,Point b,double scale){
+        double dX=a.x-b.x;
+        double dY=a.y-b.y;
+        return Math.sqrt(dX*dX+dY*dY)*scale;
+    }
+    
+    public double[][] createDifferenceFeatureMatrix( MatOfPoint2f origLM, double scale){
+        
+        int sizeLM = origLM.rows();
+        double[][] featureLM = new double[sizeLM][sizeLM];
+
+        double[] dp1;
+        double[] dp2;
+        Point pi;
+        Point pj;
+
+        for(int i=0;i<sizeLM;i++){
+            dp1=origLM.get(i,0);
+            for(int j=0;j<sizeLM;j++){
+                dp2=origLM.get(j,0);
+                pi = new Point(dp1[0], dp1[1]);
+                pj = new Point(dp2[0], dp2[1]);
+                featureLM[i][j]= getScaledDistance(pi, pj, scale);
+                i=i;
+            }
+        }
+        return featureLM;
+    }
+    
+    public boolean compareLandmarks(double[][] featureLM1,double[][] featureLM2,double tolerance){
+        
+        int sizeLM = featureLM1[0].length;
+        if(sizeLM!=featureLM2[0].length){
+            return false;
+        }
+        
+        double delta;
+        double d1;
+        double d2;
+        for (int i=0; i<sizeLM;i++){
+            for(int j=0;j<sizeLM;j++){
+                d1=featureLM1[i][j];
+                d2=featureLM2[i][j];
+                delta=Math.abs(d1-d2);
+                if(delta/d1>max){
+                    max=delta/d1;
+                }
+                if(delta/d2>max){
+                    max=delta/d2;
+                }
+                if(max>tolerance){
+                    return false;
+                }
+            }
+        }
+        return true;
+    }
+    
+    public void testVerification(double tolerance){
+        String imgName1="";
+        String imgName2="";
+        Mat img1;
+        Mat img2;
+        for(int i=0;i<imgs.size();i++){
+            imgName1=imgs.get(i).split("\\.")[0];
+            img1 = Imgcodecs.imread(Input_Images_PATH+"/"+imgs.get(i));
+            for(int j=0;j<imgs.size();j++){
+                if(i==j){
+                    continue;
+                }
+                imgName2=imgs.get(j).split("\\.")[0];
+                img2 = Imgcodecs.imread(Input_Images_PATH+"/"+imgs.get(j));
+                System.out.println(imgName1+" vs "+imgName2+" Same? : "+compare(img1, img2, tolerance));
+            }
+        }
     }
 
 }
